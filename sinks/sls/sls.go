@@ -24,6 +24,7 @@ import (
 	"net/url"
 	"os"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/AliyunContainerService/kube-eventer/core"
@@ -70,6 +71,7 @@ type Config struct {
 	internal        bool
 	accessKeyId     string
 	accessKeySecret string
+	ackEnvMap       map[string]string
 }
 
 func (s *SLSSink) Name() string {
@@ -139,6 +141,13 @@ func (s *SLSSink) eventToContents(event *v1.Event) []*sls.Log_Content {
 		Key:   &level,
 		Value: &event.Type,
 	})
+
+	for key, value := range s.Config.ackEnvMap {
+		contents = append(contents, &sls.Log_Content{
+			Key:   &key,
+			Value: &value,
+		})
+	}
 
 	if event.InvolvedObject.Kind == podEvent {
 		podId := string(event.InvolvedObject.UID)
@@ -227,6 +236,16 @@ func parseConfig(uri *url.URL) (*Config, error) {
 			c.internal = internal
 		}
 	}
+
+	var ackEnvMap map[string]string
+	ackEnvMap = make(map[string]string)
+	for _, value := range os.Environ() {
+		envParam := strings.Split(value, "=")
+		if strings.HasPrefix(envParam[0], "ACK_") {
+			ackEnvMap[envParam[0]] = envParam[1]
+		}
+	}
+	c.ackEnvMap = ackEnvMap
 	return c, nil
 }
 
